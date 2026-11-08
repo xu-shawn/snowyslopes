@@ -1,0 +1,36 @@
+#version 450
+// gpu/gate.comp: origin.cpp's phase gate on the GPU. Invocation i handles indices BASE + i*PER .. + PER - 1; index k
+// is seed (k G) ^ X, so xSetSeed's two halves are mix(k G) and mix((k+1) G) and each mix serves two seeds. A seed
+// passes when the y phases of erosion -9, humidity -8, temperature -10 (both stacks) are within LIM0..2 of mid-cell
+// (phases as the low 45 bits of nextLong >> 11). Passing indices are appended to OUT.
+#extension GL_ARB_gpu_shader_int64 : require
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) buffer Out { uint count; uint cap; uint64_t idx[]; } outb;
+layout(push_constant) uniform PC { uint64_t base; uint64_t lim0; uint64_t lim1; uint64_t lim2; uint per; } pc;
+const uint64_t G = 0x9e3779b97f4a7c15ul, A = 0xbf58476d1ce4e5b9ul, B = 0x94d049bb133111ebul;
+const uint64_t NLO[3] = uint64_t[3](0xd02491e6058f6fd8ul, 0x81bb4d22e8dc168eul, 0x5c7e6b29735f0d7ful);
+const uint64_t NHI[3] = uint64_t[3](0x4792512c94c17a80ul, 0xf1c8b4bea16303cdul, 0xf7d86f1bbc734988ul);
+const uint64_t OLO[3] = uint64_t[3](0x082fe255f8be6631ul, 0x0ef68ec68504005eul, 0x36d326eed40efeb2ul);
+const uint64_t OHI[3] = uint64_t[3](0x4e96119e22dedc81ul, 0x48b6bf93a2789640ul, 0x5be9ce18223c636aul);
+uint64_t rotl(uint64_t x, int k) { return (x << k) | (x >> (64 - k)); }
+uint64_t nl(inout uint64_t l, inout uint64_t h) { uint64_t a = l, b = h; uint64_t n = rotl(a + b, 17) + a; b ^= a; l = rotl(a, 49) ^ b ^ (b << 21); h = rotl(b, 28); return n; }
+uint64_t mixz(uint64_t z) { z = (z ^ (z >> 30)) * A; z = (z ^ (z >> 27)) * B; return z ^ (z >> 31); }
+bool window(uint64_t r, uint64_t lim) { uint64_t v = (r >> 11) & ((1ul << 45) - 1ul); uint64_t m = 1ul << 44; uint64_t d = v > m ? v - m : m - v; return d <= lim; }
+void main() {
+    const uint64_t k0 = pc.base + uint64_t(gl_GlobalInvocationID.x) * uint64_t(pc.per);
+    uint64_t t = k0 * G, mnext = mixz(t);
+    for (uint i = 0u; i < pc.per; i++) {
+        const uint64_t m = mnext; t += G; mnext = mixz(t);
+        uint64_t l = m, h = mnext; const uint64_t wlo = nl(l, h), whi = nl(l, h);
+        bool pass = true;
+        for (int n = 0; n < 3 && pass; n++) {
+            const uint64_t lim = n == 0 ? pc.lim0 : n == 1 ? pc.lim1 : pc.lim2;
+            uint64_t rl = wlo ^ NLO[n], rh = whi ^ NHI[n];
+            for (int side = 0; side < 2 && pass; side++) {
+                const uint64_t a = nl(rl, rh), b = nl(rl, rh); uint64_t ol = a ^ OLO[n], oh = b ^ OHI[n];
+                nl(ol, oh); pass = window(nl(ol, oh), lim);
+            }
+        }
+        if (pass) { const uint slot = atomicAdd(outb.count, 1u); if (slot < outb.cap) outb.idx[slot] = k0 + uint64_t(i); }
+    }
+}

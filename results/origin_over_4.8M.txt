@@ -1,0 +1,21 @@
+Snowy Slopes containing (0, 0), default world type, above 4.8M blocks^2
+Measured at y 256 on the 1:4 biome grid, 4-connected, rivers bridged; every seed verified with MC-Measure
+(bin/mcmeasure SEED 0 0). Earlier spreadsheet record: 4,068,576 (seed 1555000016785099680).
+
+ #                   seed   blocks^2  1:4 cells  run
+--  ---------------------  ---------  ---------  ------
+ 1    7420745560948894716  5,196,288    324,768  p10
+ 2    6095040073850818261  5,128,608    320,538  p10
+ 3    4098352742734554736  5,021,792    313,862  p10
+ 4   -2390204488484273359  5,009,056    313,066  p09
+ 5   -6948350218863262118  4,976,288    311,018  p10
+ 6    3757684230839306577  4,962,624    310,164  p10
+ 7    6234763713348373487  4,901,664    306,354  p10
+ 8    3380653691324929051  4,882,176    305,136  p10
+ 9         92053337330331  4,877,456    304,841  c_none
+10    5935781636112689311  4,839,968    302,498  p10
+11   -8745569519626601663  4,821,968    301,373  p10
+12   -7041398222711313931  4,816,576    301,036  p10
+
+run: p10 = src/origin.cpp as released (9.08e12 seeds, 6.8 h); p09 = the same without the GPU gate;
+c_none = an early version (phase gate only, no tail cuts). Every verified find: results/finds.jsonl.
